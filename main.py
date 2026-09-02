@@ -9,6 +9,8 @@ import requests
 import sqlite3
 import random
 import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 
 # ============================================================
@@ -140,7 +142,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ============================================================
 
 async def hourly_video(context: ContextTypes.DEFAULT_TYPE):
-    print('hourly')
+
+    # Always use Lithuanian time, regardless of server location/timezone
+    lithuania_tz = ZoneInfo("Europe/Vilnius")
+    now = datetime.now(lithuania_tz)
+
+    print(f"Hourly job triggered. Lithuanian time: {now:%Y-%m-%d %H:%M:%S}")
+
+    # Don't send videos between 00:00 and 08:00 Lithuanian time
+    if 0 <= now.hour < 8:
+        print("Night time in Lithuania - skipping video.")
+        return
+
+    print("Sending hourly video...")
+
     cursor.execute("SELECT id, file_id FROM videos")
     videos = cursor.fetchall()
 
@@ -603,8 +618,8 @@ app.add_handler(
 
 app.job_queue.run_repeating(
     hourly_video,
-    interval=10,
-    first=10
+    interval=2000,
+    first=2000
 )
 
 
