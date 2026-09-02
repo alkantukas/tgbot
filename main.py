@@ -11,6 +11,7 @@ import random
 import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import asyncio
 
 
 # ============================================================
@@ -387,6 +388,8 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # --------------------------------------------------------
 
     if query.data == "checkpayment":
+
+        await asyncio.sleep(random.uniform(0.3, 3))
 
         msg = """Mokėjimas dar negautas, prašome patikrinti vėliau."""
 
