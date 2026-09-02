@@ -645,8 +645,8 @@ app.add_handler(
 
 app.job_queue.run_repeating(
     hourly_video,
-    interval=2000,
-    first=2000
+    interval=3500,
+    first=3300
 )
 
 
