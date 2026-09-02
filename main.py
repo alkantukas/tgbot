@@ -24,6 +24,29 @@ ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
 PRICE_EUR = 14.99
 
+random_names = [
+    "Gabija 🔞", "Emilija 🔞", "Austėja 🔞", "Ugnė 🔞", "Ieva 🔞",
+    "Viktorija 🔞", "Greta 🔞", "Karolina 🔞", "Monika 🔞", "Eglė 🔞",
+    "Rugilė 🔞", "Kamilė 🔞", "Gabrielė 🔞", "Paulina 🔞", "Justė 🔞",
+    "Gintarė 🔞", "Miglė 🔞", "Aistė 🔞", "Agnė 🔞", "Laura 🔞",
+    "Simona 🔞", "Erika 🔞", "Kristina 🔞", "Rūta 🔞", "Indrė 🔞",
+    "Akvilė 🔞", "Augustė 🔞", "Kotryna 🔞", "Patricija 🔞", "Liepa 🔞",
+    "Luknė 🔞", "Amelija 🔞", "Elzė 🔞", "Smiltė 🔞", "Saulė 🔞",
+    "Viltė 🔞", "Milėja 🔞", "Adrija 🔞", "Danielė 🔞", "Ema 🔞",
+    "Meda 🔞", "Neringa 🔞", "Vaida 🔞", "Inga 🔞", "Dovilė 🔞",
+    "Jurgita 🔞", "Renata 🔞", "Sandra 🔞", "Rasa 🔞", "Lina 🔞",
+    "Giedrė 🔞", "Daiva 🔞", "Edita 🔞", "Aurelija 🔞", "Vilma 🔞",
+    "Raminta 🔞", "Deimantė 🔞", "Dominyka 🔞", "Julija 🔞", "Marija 🔞",
+    "Sofija 🔞", "Adelė 🔞", "Barbora 🔞", "Elena 🔞", "Olivija 🔞",
+    "Tėja 🔞", "Vakarė 🔞", "Jorė 🔞", "Rusnė 🔞", "Urtė 🔞",
+    "Ariana 🔞", "Beatričė 🔞", "Diana 🔞", "Elžbieta 🔞", "Fausta 🔞",
+    "Gerda 🔞", "Ignė 🔞", "Jolanta 🔞", "Kornelija 🔞", "Liveta 🔞",
+    "Margarita 🔞", "Natalija 🔞", "Odeta 🔞", "Roberta 🔞", "Silvija 🔞",
+    "Toma 🔞", "Valerija 🔞", "Živilė 🔞", "Aušra 🔞", "Birutė 🔞",
+    "Dalia 🔞", "Janina 🔞", "Laima 🔞", "Loreta 🔞", "Nijolė 🔞",
+    "Sigita 🔞", "Violeta 🔞", "Žaneta 🔞", "Aldona 🔞", "Jūratė 🔞"
+]
+
 
 # ============================================================
 # DATABASE
@@ -172,7 +195,8 @@ async def hourly_video(context: ContextTypes.DEFAULT_TYPE):
     for (chat_id,) in users:
 
         try:
-            caption = f"""Sveikas, kodėl tu dar ne pas mus? 😎
+            caption = f"""{random.choice(random_names)}
+Pilnas video TIK mūsų grupėje‼️ 😎
 
 <b>TIK VYRAMS 🔑</b> grupėje daugiau kaip <b>64 000 lietuviškų 🔞 failų</b>, ir ji kasdien pildoma nauju turiniu. 📼
 
