@@ -12,6 +12,7 @@ import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import asyncio
+from telegram.error import Forbidden
 
 
 # ============================================================
@@ -42,10 +43,10 @@ random_names = [
     "Ariana 🔞", "Beatričė 🔞", "Diana 🔞", "Elžbieta 🔞", "Fausta 🔞",
     "Gerda 🔞", "Ignė 🔞", "Jolanta 🔞", "Kornelija 🔞", "Liveta 🔞",
     "Margarita 🔞", "Natalija 🔞", "Odeta 🔞", "Roberta 🔞", "Silvija 🔞",
-    "Toma 🔞", "Valerija 🔞", "Živilė 🔞", "Aušra 🔞", "Birutė 🔞",
-    "Dalia 🔞", "Janina 🔞", "Laima 🔞", "Loreta 🔞", "Nijolė 🔞",
-    "Sigita 🔞", "Violeta 🔞", "Žaneta 🔞", "Aldona 🔞", "Jūratė 🔞"
+    "Toma 🔞", "Valerija 🔞", "Evita 🔞"
 ]
+
+bielkos_videku_id = []
 
 
 # ============================================================
@@ -63,18 +64,34 @@ else:
 db = sqlite3.connect(DB_PATH, check_same_thread=False)
 cursor = db.cursor()
 
+
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
     chat_id INTEGER PRIMARY KEY
 )
 """)
 
+
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS videos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    file_id TEXT NOT NULL
+    file_id TEXT NOT NULL,
+    media_type TEXT NOT NULL DEFAULT 'video'
 )
 """)
+
+
+# Upgrade an existing database that doesn't have media_type yet.
+# All previously saved items are videos, so they get "video".
+try:
+    cursor.execute("""
+        ALTER TABLE videos
+        ADD COLUMN media_type TEXT NOT NULL DEFAULT 'video'
+    """)
+except sqlite3.OperationalError:
+    # Column already exists
+    pass
+
 
 db.commit()
 
@@ -162,7 +179,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================================
-# HOURLY VIDEO
+# HOURLY MEDIA
 # ============================================================
 
 async def hourly_video(context: ContextTypes.DEFAULT_TYPE):
@@ -173,21 +190,24 @@ async def hourly_video(context: ContextTypes.DEFAULT_TYPE):
 
     print(f"Hourly job triggered. Lithuanian time: {now:%Y-%m-%d %H:%M:%S}")
 
-    # Don't send videos between 00:00 and 08:00 Lithuanian time
+    # Don't send media between 00:00 and 08:00 Lithuanian time
     if 0 <= now.hour < 8:
-        print("Night time in Lithuania - skipping video.")
+        print("Night time in Lithuania - skipping media.")
         return
 
-    print("Sending hourly video...")
+    print("Sending hourly media...")
 
-    cursor.execute("SELECT id, file_id FROM videos")
+    cursor.execute(
+        "SELECT id, file_id, media_type FROM videos"
+    )
+
     videos = cursor.fetchall()
 
     if not videos:
-        print("No videos available.")
+        print("No media available.")
         return
 
-    video_id, file_id = random.choice(videos)
+    media_id, file_id, media_type = random.choice(videos)
 
     cursor.execute("SELECT chat_id FROM users")
     users = cursor.fetchall()
@@ -195,7 +215,13 @@ async def hourly_video(context: ContextTypes.DEFAULT_TYPE):
     for (chat_id,) in users:
 
         try:
-            caption = f"""{random.choice(random_names)}
+
+            randname = random.choice(random_names)
+
+            if media_id in bielkos_videku_id:
+                randname = "Gerda 🔞"
+
+            caption = f"""{randname}
 Pilnas video TIK mūsų grupėje‼️ 😎
 
 <b>TIK VYRAMS 🔑</b> grupėje daugiau kaip <b>64 000 lietuviškų 🔞 failų</b>, ir ji kasdien pildoma nauju turiniu. 📼
@@ -207,26 +233,59 @@ Pilnas video TIK mūsų grupėje‼️ 😎
 <b>Nori prisijungti?</b>
 Spausk čia 👉 <b>/START</b>"""
 
-            await context.bot.send_video(
-                chat_id=chat_id,
-                video=file_id,
-                caption=caption,
-                parse_mode="HTML"
+            # Send a photo if the saved item is a photo
+            if media_type == "photo":
+
+                await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=file_id,
+                    caption=caption,
+                    parse_mode="HTML"
+                )
+
+            # Otherwise send it as a video
+            else:
+
+                await context.bot.send_video(
+                    chat_id=chat_id,
+                    video=file_id,
+                    caption=caption,
+                    parse_mode="HTML"
+                )
+
+        except Forbidden:
+
+            # User blocked the bot / bot cannot contact them anymore
+            print(
+                f"User {chat_id} blocked the bot. "
+                f"Removing from database."
             )
 
+            cursor.execute(
+                "DELETE FROM users WHERE chat_id = ?",
+                (chat_id,)
+            )
+
+            db.commit()
+
         except Exception as e:
+
+            # Keep user in DB for temporary/network/Telegram errors
             print(f"Failed to send to {chat_id}: {e}")
 
 
 # ============================================================
 # /ADDVIDEO
+# Accepts BOTH photos and videos
 # ============================================================
 
 async def add_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print('add video')
+
+    print("add media")
+
     # Admin only
     if update.effective_user.id != ADMIN_ID:
-        print('not admin')
+        print("not admin")
         print(update.effective_user.id)
         return
 
@@ -234,33 +293,47 @@ async def add_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.reply_to_message:
 
         await update.message.reply_text(
-            "❌ Reply to a video with /addvideo"
+            "❌ Reply to a video or photo with /addvideo"
         )
 
         return
 
-    video = update.message.reply_to_message.video
+    replied_message = update.message.reply_to_message
 
-    if not video:
+    # Check if it's a video
+    if replied_message.video:
+
+        file_id = replied_message.video.file_id
+        media_type = "video"
+
+    # Check if it's a photo
+    elif replied_message.photo:
+
+        # Telegram gives several image sizes.
+        # Last one is normally the highest quality.
+        file_id = replied_message.photo[-1].file_id
+        media_type = "photo"
+
+    else:
 
         await update.message.reply_text(
-            "❌ The message you're replying to doesn't contain a video."
+            "❌ The message you're replying to doesn't contain a video or photo."
         )
 
         return
 
-    # Save Telegram file_id
+    # Save Telegram file_id + media type
     cursor.execute(
-        "INSERT INTO videos (file_id) VALUES (?)",
-        (video.file_id,)
+        "INSERT INTO videos (file_id, media_type) VALUES (?, ?)",
+        (file_id, media_type)
     )
 
     db.commit()
 
-    video_id = cursor.lastrowid
+    media_id = cursor.lastrowid
 
     await update.message.reply_text(
-        f"✅ Video added!\n\nVideo ID: {video_id}"
+        f"✅ {media_type.capitalize()} added!\n\nID: {media_id}"
     )
 
 
@@ -269,12 +342,14 @@ async def add_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ============================================================
 
 async def list_videos(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print('LIST')
+
+    print("LIST")
+
     if update.effective_user.id != ADMIN_ID:
         return
 
     cursor.execute(
-        "SELECT id FROM videos ORDER BY id"
+        "SELECT id, media_type FROM videos ORDER BY id"
     )
 
     videos = cursor.fetchall()
@@ -282,16 +357,21 @@ async def list_videos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not videos:
 
         await update.message.reply_text(
-            "📭 No videos saved."
+            "📭 No media saved."
         )
 
         return
 
-    message = "🎥 Saved videos:\n\n"
+    message = "🎥 Saved media:\n\n"
 
-    for (video_id,) in videos:
+    for media_id, media_type in videos:
 
-        message += f"ID: {video_id}\n"
+        if media_type == "photo":
+            emoji = "🖼️"
+        else:
+            emoji = "🎥"
+
+        message += f"{emoji} ID: {media_id} ({media_type})\n"
 
     message += "\nDelete with /deletevideo ID"
 
@@ -317,19 +397,19 @@ async def delete_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
 
-        video_id = int(context.args[0])
+        media_id = int(context.args[0])
 
     except ValueError:
 
         await update.message.reply_text(
-            "❌ Video ID must be a number."
+            "❌ ID must be a number."
         )
 
         return
 
     cursor.execute(
         "DELETE FROM videos WHERE id = ?",
-        (video_id,)
+        (media_id,)
     )
 
     db.commit()
@@ -337,13 +417,13 @@ async def delete_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if cursor.rowcount == 0:
 
         await update.message.reply_text(
-            "❌ Video not found."
+            "❌ Media not found."
         )
 
     else:
 
         await update.message.reply_text(
-            f"🗑️ Video {video_id} deleted."
+            f"🗑️ Media {media_id} deleted."
         )
 
 
@@ -377,7 +457,7 @@ async def test_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     cursor.execute(
-        "SELECT id, file_id FROM videos"
+        "SELECT id, file_id, media_type FROM videos"
     )
 
     videos = cursor.fetchall()
@@ -385,17 +465,26 @@ async def test_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not videos:
 
         await update.message.reply_text(
-            "❌ No videos saved."
+            "❌ No media saved."
         )
 
         return
 
-    video_id, file_id = random.choice(videos)
+    media_id, file_id, media_type = random.choice(videos)
 
-    await update.message.reply_video(
-        video=file_id,
-        caption=f"🧪 Test video\nID: {video_id}"
-    )
+    if media_type == "photo":
+
+        await update.message.reply_photo(
+            photo=file_id,
+            caption=f"🧪 Test photo\nID: {media_id}"
+        )
+
+    else:
+
+        await update.message.reply_video(
+            video=file_id,
+            caption=f"🧪 Test video\nID: {media_id}"
+        )
 
 
 # ============================================================
@@ -625,7 +714,7 @@ app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("help", help_command))
 
 
-# Admin video commands
+# Admin video/media commands
 app.add_handler(CommandHandler("addvideo", add_video))
 app.add_handler(CommandHandler("videos", list_videos))
 app.add_handler(CommandHandler("deletevideo", delete_video))
@@ -645,8 +734,8 @@ app.add_handler(
 
 app.job_queue.run_repeating(
     hourly_video,
-    interval=3500,
-    first=3300
+    interval=2000,
+    first=2000
 )
 
 
