@@ -46,7 +46,7 @@ random_names = [
     "Toma 🔞", "Valerija 🔞", "Evita 🔞"
 ]
 
-bielkos_videku_id = []
+bielkos_videku_id = [14, 15, 16]
 
 
 # ============================================================
