@@ -23,7 +23,7 @@ TOKEN = os.getenv("TOKEN")
 CMC_API_KEY = os.getenv("CMC_API_KEY")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
-PRICE_EUR = 14.99
+PRICE_EUR = 9.99
 
 random_names = [
     "Gabija 🔞", "Emilija 🔞", "Austėja 🔞", "Ugnė 🔞", "Ieva 🔞",
