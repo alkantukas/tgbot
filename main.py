@@ -119,6 +119,37 @@ def get_crypto_amount(symbol):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
+        # Check if user is new
+    chat_id = update.effective_chat.id
+    user = update.effective_user
+
+    cursor.execute(
+        "SELECT chat_id FROM users WHERE chat_id = ?",
+        (chat_id,)
+    )
+
+    is_new_user = cursor.fetchone() is None
+
+    # Save user
+    cursor.execute(
+        "INSERT OR IGNORE INTO users (chat_id) VALUES (?)",
+        (chat_id,)
+    )
+
+    db.commit()
+
+    # Log new users to console
+    if is_new_user:
+        username = f"@{user.username}" if user.username else "No username"
+
+        print(
+            f"🆕 NEW USER | "
+            f"Username: {username} | "
+            f"Name: {user.full_name} | "
+            f"ID: {user.id}",
+            flush=True
+        )
+        
     # Save user
     cursor.execute(
         "INSERT OR IGNORE INTO users (chat_id) VALUES (?)",
@@ -231,6 +262,28 @@ Spausk čia 👉 <b>/START</b>"""
         except Exception as e:
             # Keep user in DB for temporary/network/Telegram errors
             print(f"Failed to send to {chat_id}: {e}")
+
+
+# ============================================================
+# /POST
+# ============================================================
+
+async def post_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    # Admin only
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    await update.message.reply_text(
+        "📤 Sending hourly video to all users..."
+    )
+
+    # Trigger the existing hourly video function
+    await hourly_video(context)
+
+    await update.message.reply_text(
+        "✅ Post completed!"
+    )
 
 
 # ============================================================
