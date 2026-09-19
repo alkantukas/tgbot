@@ -149,7 +149,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"ID: {user.id}",
             flush=True
         )
-        
+
     # Save user
     cursor.execute(
         "INSERT OR IGNORE INTO users (chat_id) VALUES (?)",
@@ -196,7 +196,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # HOURLY VIDEO
 # ============================================================
 
-async def hourly_video(context: ContextTypes.DEFAULT_TYPE):
+async def hourly_video(context: ContextTypes.DEFAULT_TYPE, force=False):
 
     # Always use Lithuanian time, regardless of server location/timezone
     lithuania_tz = ZoneInfo("Europe/Vilnius")
@@ -205,7 +205,7 @@ async def hourly_video(context: ContextTypes.DEFAULT_TYPE):
     print(f"Hourly job triggered. Lithuanian time: {now:%Y-%m-%d %H:%M:%S}")
 
     # Don't send videos between 00:00 and 08:00 Lithuanian time
-    if 0 <= now.hour < 8:
+    if not force and 0 <= now.hour < 8:
         print("Night time in Lithuania - skipping video.")
         return
 
@@ -279,7 +279,7 @@ async def post_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     # Trigger the existing hourly video function
-    await hourly_video(context)
+    await hourly_video(context, force=True)
 
     await update.message.reply_text(
         "✅ Post completed!"
@@ -699,6 +699,7 @@ app.add_handler(CommandHandler("videos", list_videos))
 app.add_handler(CommandHandler("deletevideo", delete_video))
 app.add_handler(CommandHandler("users", users_command))
 app.add_handler(CommandHandler("testvideo", test_video))
+app.add_handler(CommandHandler("post", post_command))
 
 
 # Button handler
