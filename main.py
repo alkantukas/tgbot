@@ -512,6 +512,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton("$SOL", callback_data="sol"),
                 InlineKeyboardButton("$ETH", callback_data="eth"),
                 InlineKeyboardButton("$USDT", callback_data="usdt"),
+                InlineKeyboardButton("$BTC", callback_data="btc"),
             ],
             [
                 InlineKeyboardButton(
@@ -549,7 +550,7 @@ Kaip atsiskaityti:
     # CRYPTO PAYMENT
     # --------------------------------------------------------
 
-    if query.data in ["sol", "eth", "usdt"]:
+    if query.data in ["sol", "eth", "usdt", "btc"]:
 
         membership_price = get_user_price(query.from_user.id)
 
@@ -574,6 +575,13 @@ Kaip atsiskaityti:
                 "name": "USDT",
                 "network": "TRC20",
                 "address": "TBJbSEnGZg5HjLpk72TxGNWkGGyevkFzM4"
+            },
+
+            "btc": {
+                "symbol": "BTC",
+                "name": "BTC",
+                "network": "BTC",
+                "address": "bc1q9zmhss0pqhr8l762unqnfcq6nrvcnv9l2gnncz"
             }
 
         }
