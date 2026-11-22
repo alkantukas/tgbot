@@ -82,6 +82,15 @@ CREATE TABLE IF NOT EXISTS videos (
 )
 """)
 
+# Store the latest successful EUR price for each cryptocurrency.
+# This survives bot restarts because it is saved in the SQLite database.
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS crypto_prices (
+    symbol TEXT PRIMARY KEY,
+    price_eur REAL NOT NULL
+)
+""")
+
 db.commit()
 
 
@@ -110,11 +119,43 @@ def get_crypto_amount(symbol, membership_price_eur):
         timeout=10
     )
 
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+        data = response.json()
+        price_eur = float(data["data"][symbol][0]["quote"]["EUR"]["price"])
 
-    data = response.json()
+        if price_eur <= 0:
+            raise ValueError(f"Invalid EUR price returned for {symbol}: {price_eur}")
 
-    price_eur = data["data"][symbol][0]["quote"]["EUR"]["price"]
+        # Cache only successful, valid API prices.
+        cursor.execute(
+            """
+            INSERT INTO crypto_prices (symbol, price_eur)
+            VALUES (?, ?)
+            ON CONFLICT(symbol) DO UPDATE SET price_eur = excluded.price_eur
+            """,
+            (symbol, price_eur)
+        )
+        db.commit()
+
+    except Exception as api_error:
+        print(f"CoinMarketCap API error for {symbol}: {api_error}")
+
+        # Fall back to the most recently saved successful price for this coin.
+        cursor.execute(
+            "SELECT price_eur FROM crypto_prices WHERE symbol = ?",
+            (symbol,)
+        )
+        cached_price = cursor.fetchone()
+
+        if cached_price is None:
+            # No successful price has ever been saved for this coin.
+            raise RuntimeError(
+                f"No cached EUR price is available for {symbol}"
+            ) from api_error
+
+        price_eur = cached_price[0]
+        print(f"Using cached {symbol} price: €{price_eur}")
 
     return membership_price_eur / price_eur
 
@@ -225,19 +266,24 @@ async def hourly_video(context: ContextTypes.DEFAULT_TYPE, force=False):
         print("No videos available.")
         return
 
-    video_id, file_id = random.choice(videos)
+    # Pick one main video; if it fails for a user, try the other videos.
+    first_video = random.choice(videos)
+    other_videos = [video for video in videos if video != first_video]
+    random.shuffle(other_videos)
+    video_attempts = [first_video] + other_videos
 
     cursor.execute("SELECT chat_id FROM users")
     users = cursor.fetchall()
 
     for (chat_id,) in users:
 
-        try:
-            randname = random.choice(random_names)
-            if video_id in bielkos_videku_id:
-                randname = "Gerda 🔞"
-            
-            caption = f"""{randname}
+        for video_id, file_id in video_attempts:
+            try:
+                randname = random.choice(random_names)
+                if video_id in bielkos_videku_id:
+                    randname = "Gerda 🔞"
+
+                caption = f"""{randname}
 Pilnas video TIK mūsų grupėje‼️ 😎
 
 <b>TIK VYRAMS 🔑</b> grupėje daugiau kaip <b>64 000 lietuviškų 🔞 failų</b>, ir ji kasdien pildoma nauju turiniu. 📼
@@ -249,26 +295,36 @@ Pilnas video TIK mūsų grupėje‼️ 😎
 <b>Nori prisijungti?</b>
 Spausk čia 👉 <b>/START</b>"""
 
-            await context.bot.send_video(
-                chat_id=chat_id,
-                video=file_id,
-                caption=caption,
-                parse_mode="HTML"
-            )
+                await context.bot.send_video(
+                    chat_id=chat_id,
+                    video=file_id,
+                    caption=caption,
+                    parse_mode="HTML"
+                )
 
-        except Forbidden:
-            # User blocked the bot / bot cannot contact them anymore
-            print(f"User {chat_id} blocked the bot. Removing from database.")
+                # Successfully sent; don't try any more videos for this user.
+                break
 
-            cursor.execute(
-                "DELETE FROM users WHERE chat_id = ?",
-                (chat_id,)
-            )
-            db.commit()
+            except Forbidden:
+                # User blocked the bot / bot cannot contact them anymore
+                print(f"User {chat_id} blocked the bot. Removing from database.")
 
-        except Exception as e:
-            # Keep user in DB for temporary/network/Telegram errors
-            print(f"Failed to send to {chat_id}: {e}")
+                cursor.execute(
+                    "DELETE FROM users WHERE chat_id = ?",
+                    (chat_id,)
+                )
+                db.commit()
+                break
+
+            except Exception as e:
+                # Try another saved video for this user.
+                print(
+                    f"Failed to send video {video_id} to {chat_id}: {e}. "
+                    "Trying another video..."
+                )
+
+        else:
+            print(f"All saved videos failed to send to {chat_id}.")
 
 
 # ============================================================
