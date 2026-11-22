@@ -594,7 +594,7 @@ Kaip atsiskaityti:
                 coin["symbol"], membership_price
             )
 
-            amount = f"{amount:.8f}".rstrip("0").rstrip(".")
+            amount = str(amount)[:8]
 
             keyboard = [
                 [
