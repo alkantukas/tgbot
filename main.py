@@ -23,7 +23,13 @@ TOKEN = os.getenv("TOKEN")
 CMC_API_KEY = os.getenv("CMC_API_KEY")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
-PRICE_EUR = 9.99
+ODD_ID_PRICE_EUR = 9.99
+EVEN_ID_PRICE_EUR = 14.99
+
+
+def get_user_price(user_id: int) -> float:
+    """Return the membership price based on the Telegram user's ID."""
+    return ODD_ID_PRICE_EUR if user_id % 2 else EVEN_ID_PRICE_EUR
 
 random_names = [
     "Gabija 🔞", "Emilija 🔞", "Austėja 🔞", "Ugnė 🔞", "Ieva 🔞",
@@ -83,7 +89,7 @@ db.commit()
 # CRYPTO PRICE
 # ============================================================
 
-def get_crypto_amount(symbol):
+def get_crypto_amount(symbol, membership_price_eur):
 
     url = "https://pro-api.coinmarketcap.com/v2/cryptocurrency/quotes/latest"
 
@@ -110,7 +116,7 @@ def get_crypto_amount(symbol):
 
     price_eur = data["data"][symbol][0]["quote"]["EUR"]["price"]
 
-    return PRICE_EUR / price_eur
+    return membership_price_eur / price_eur
 
 
 # ============================================================
@@ -122,6 +128,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Check if user is new
     chat_id = update.effective_chat.id
     user = update.effective_user
+    membership_price = get_user_price(user.id)
 
     cursor.execute(
         "SELECT chat_id FROM users WHERE chat_id = ?",
@@ -179,7 +186,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [
             InlineKeyboardButton(
-                f"💳 MĖNESIO NARYSTĖ: {PRICE_EUR}€ CRYPTO",
+                f"💳 MĖNESIO NARYSTĖ: {membership_price:.2f}€ CRYPTO",
                 callback_data="mokejimas"
             )
         ]
@@ -498,6 +505,8 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "mokejimas":
 
+        membership_price = get_user_price(query.from_user.id)
+
         keyboard = [
             [
                 InlineKeyboardButton("$SOL", callback_data="sol"),
@@ -515,7 +524,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = f"""💳 Mėnesio narystė
 
 📅 Trukmė 1 mėnuo
-💰 Kaina {PRICE_EUR} €
+💰 Kaina {membership_price:.2f} €
 ⏳ Narystė galios 30 dienų nuo apmokėjimo patvirtinimo.
 
 Kaip atsiskaityti:
@@ -541,6 +550,8 @@ Kaip atsiskaityti:
     # --------------------------------------------------------
 
     if query.data in ["sol", "eth", "usdt"]:
+
+        membership_price = get_user_price(query.from_user.id)
 
         crypto_info = {
 
@@ -572,10 +583,10 @@ Kaip atsiskaityti:
         try:
 
             amount = get_crypto_amount(
-                coin["symbol"]
+                coin["symbol"], membership_price
             )
 
-            amount = str(amount)[:6]
+            amount = f"{amount:.8f}".rstrip("0").rstrip(".")
 
             keyboard = [
                 [
@@ -632,6 +643,8 @@ Užsakymas bus automatiškai atšauktas po 20 minučių negavus pavedimo."""
 
     if query.data == "back":
 
+        membership_price = get_user_price(query.from_user.id)
+
         username = (
             f"@{query.from_user.username}"
             if query.from_user.username
@@ -653,7 +666,7 @@ Užsakymas bus automatiškai atšauktas po 20 minučių negavus pavedimo."""
         keyboard = [
             [
                 InlineKeyboardButton(
-                    f"💳 MĖNESIO NARYSTĖ: {PRICE_EUR}€ CRYPTO",
+                    f"💳 MĖNESIO NARYSTĖ: {membership_price:.2f}€ CRYPTO",
                     callback_data="mokejimas"
                 )
             ]
